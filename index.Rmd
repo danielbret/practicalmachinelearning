@@ -1,0 +1,128 @@
+---
+title: "Practical Machine Learning - Project Report"
+author: "D. Bretheim"
+date: "August 24, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+## Housekeeping
+#  Clean up RStudio
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+#  Set working directory
+setwd("C:/Users/Dan/datasciencecoursera/Course8_Project")
+#  Confirm working directory
+getwd()
+library(caret)
+```
+
+## Overview  
+The project objective is to develop a model to predict the weight lifting method used by subjects when performing dumbbell biceps curls.  The five methods include:  exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D), and throwing the hips to the front (Class E).  The data were obtained from six male participants and were captured using four sensors (belt, glove, armband, and dumbbell).  The data set contains 96 derived features sets based on the Euler angles (roll, pitch, and yaw), as well as the accelerometer, gyroscope, and magnetometer readings.  The data set also includes various statistics for the Euler angles of each of the four sensors. 
+
+## Load Raw Data, Select Features, and Partition    
+The measurement data set (pml-training.csv) contains 19,622 rows and 160 columns.  
+
+```{r}
+raw <- read.csv('pml-training.csv', header=TRUE)
+```
+Several categories of columns were deleted prior to further processing.  Columns 1-6 contained irrelevant identifier information and were deleted.  All columns for which data are completely missing (i.e., *'NA'*) in the 20 row quiz data set were also deleted on the basis that such features cannot serve as predictors if no data are present in the quiz data set.
+
+```{r}
+raw <- raw[c(7:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+```
+The resulting file contains 54 columns.  The file was checked for evidence of near zero variance (NZV) variables.   
+
+```{r}
+nsv <- nearZeroVar(raw)
+nsv
+```
+The empty vector above indicates that there is no evidence of NZV.  
+
+The data were partitioned into **training** (70%) and **test** (30%) files.
+
+```{r}
+set.seed(321)
+intrain <- createDataPartition(y=raw$classe, p=.7, list=FALSE)
+train <- raw[intrain, ]
+test <- raw[-intrain, ]
+dim(train)
+dim(test)
+```
+
+## Model Building and Cross Validation    
+Three model building methods were selected for evaluation.  K-fold cross validation with the 'cv' resampling method was used for two of the models.  This cross validation method involves splitting the data into k-subsets, where k=3 was selected.  Each subset is held out until the model is trained on all other subsets.  On overall accuracy measurement is calculated based on the accuracy of each instance.   
+ 
+### K-fold Cross Validation
+```{r}
+train_control <- trainControl(method='cv', number=3)
+```
+
+### Model 1:  Random Forest
+```{r message=FALSE, warning=FALSE}
+set.seed(123)
+rf_model <- train(classe ~ ., data=train, method='rf', trControl=train_control)
+```
+
+### Model 2:  Boosting
+```{r message=FALSE, warning=FALSE}
+set.seed(456)
+bt_model <- train(classe ~ ., data=train, method='gbm', trControl=train_control, verbose=FALSE)
+```
+
+### Model 3:  Bagging
+```{r message=FALSE, warning=FALSE}
+set.seed(789)
+bg_model <- train(classe ~ ., data=train, method='treebag')
+```
+
+## Test Models to Calculate Out of Sample Error  
+Each resulting model was applied to the test data set.  Out of sample error is < 2 percent for all models.  See the Accuracy measurement in the output displayed below.  
+
+```{r}
+# Random Forest  
+predict_rf <- predict(rf_model, newdata=test)
+cm_rf <- confusionMatrix(predict_rf, test$classe)
+cm_rf
+```
+
+```{r}
+# Boosting  
+predict_bt <- predict(bt_model, newdata=test)
+cm_bt <- confusionMatrix(predict_bt, test$classe)
+cm_bt
+```
+
+```{r}
+# Bagging  
+predict_bg <- predict(bg_model, newdata=test)
+cm_bg <- confusionMatrix(predict_bg, test$classe)
+cm_bg
+```
+
+## Model Selection 
+Each model was evaluated based in it's Accuracy measure and the levels of Sensitivity and Specificity, where the values closest to 1 are desired.  
+
+### Accuracy  
+The three models varied on Accuracy as follows:   
+&nbsp;&nbsp;&nbsp;1.  Random Forest:  .9973         
+&nbsp;&nbsp;&nbsp;2.  Boosting:  .9878  
+&nbsp;&nbsp;&nbsp;3.  Bagging:  .9952  
+
+### Sensitivity and Specificity  
+Random Forest has the highest score for Sensitivity and Specificity as indicated in the tables above.  
+
+## Apply Best Model to the Quiz Data  
+The Random Forest model was chosen based on the results above and applied to the 20 row quiz data set.  
+
+```{r}
+quiz <- read.csv('pml-testing.csv', header=TRUE)
+predictquiz <- predict(rf_model, newdata=quiz)
+predictquiz
+```
+
+## End of Report
+
+
+
+
